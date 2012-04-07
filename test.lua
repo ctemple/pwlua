@@ -5,7 +5,7 @@
 r = TestB.new()
 v = Test2.new(r)
 
-v:print3()
+v:print3(8787)
 v:print2(5943)
 
 global_print()

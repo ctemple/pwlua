@@ -24,6 +24,7 @@ extern "C"
 
 namespace pwlua
 {
+
 #ifdef _WIN32
 	typedef __int64 int64;
 	typedef __int32 int32;
@@ -31,6 +32,8 @@ namespace pwlua
 	typedef long long int64;
 	typedef int int32;
 #endif
+
+	const int __lua_default_slot = 438349857;
 
 	template<class T> class class_name
 	{
@@ -355,7 +358,7 @@ namespace pwlua
 
 						method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
 
-						stack_helper<RT>::push(L,method<FN,99999>::helper<RT>::call(*obj,mproxy->fn,L,3) );
+						stack_helper<RT>::push(L,method<FN,__lua_default_slot>::helper<RT>::call(*obj,mproxy->fn,L,3) );
 						return 1;					
 					}
 				};
@@ -370,7 +373,7 @@ namespace pwlua
 
 						method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
 
-						method<FN,99999>::helper<void>::call(*obj,mproxy->fn,L,3)
+						method<FN,__lua_default_slot>::helper<void>::call(*obj,mproxy->fn,L,3)
 					}
 				};
 			};
@@ -542,7 +545,7 @@ namespace pwlua
 				{
 					method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
 
-					stack_helper<RT>::push(L,method<FN,99999>::helper<RT>::call(mproxy->fn,L,2) );
+					stack_helper<RT>::push(L,method<FN,__lua_default_slot>::helper<RT>::call(mproxy->fn,L,2) );
 					return 1;					
 				}
 			};
@@ -553,7 +556,7 @@ namespace pwlua
 				{
 					method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
 
-					method<FN,99999>::helper<void>::call(mproxy->fn,L,2)
+					method<FN,__lua_default_slot>::helper<void>::call(mproxy->fn,L,2)
 				}
 			};
 		};
@@ -865,7 +868,7 @@ namespace pwlua
 			return *this;
 		}
 
-		template<class RT,class FN> class_helper<T>& method_slow(const char* name,FN fn)
+		template<class RT,class FN> class_helper<T>& method(const char* name,FN fn)
 		{
 			lua_CFunction lfn = _detail::object<T>::method_slow<FN>::helper<RT>::invoke;
 
@@ -989,7 +992,7 @@ namespace pwlua
 		lua_setglobal(L,name);
 	}
 
-	template<class RT,class FN>  void method_slow(lua_State* L,const char* name,FN fn)
+	template<class RT,class FN>  void method(lua_State* L,const char* name,FN fn)
 	{
 		lua_CFunction lfn = _detail::method_slow<FN>::helper<RT>::invoke;
 
@@ -1048,6 +1051,11 @@ namespace pwlua
 
 	class temporary
 	{
+	private:
+		temporary(const temporary& r);
+		temporary& operator =(const temporary& r);
+		void* operator new(size_t size);
+		void  operator delete(void* pp);
 	public:
 		temporary(lua_State* _L,reference& r)
 		{

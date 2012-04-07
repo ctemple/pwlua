@@ -30,9 +30,9 @@ public:
 		printf("Test::print2 %d\r\n",n121);
 	}
 
-	int print3()
+	int print3(int n)
 	{
-		return 120102;
+		return n;
 	}
 };
 
@@ -81,11 +81,6 @@ struct STest
 	}
 };
 
-
-#define STRINGIZE(something) STRINGIZE_HELPER(something)
-#define STRINGIZE_HELPER(something) #something
-// #define ENFORCE(exp) MakeEnforcer((exp),__FILE__ "_" STRINGIZE(__LINE__)).Enforce()
-
 int _tmain(int argc, _TCHAR* argv[])
 {
 	lua_State* L = luaL_newstate();
@@ -95,7 +90,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		.ctor()
 		.method_fast<void, 1>("print",&Test::print)
 		.method_fast<void, 2>("print2",&Test::print2)
-		.method_slow<int>("print3",&Test::print3);
+		.method<int>("print3",&Test::print3);
 		
 	pwlua::class_<TestB>(L,"TestB")
 		.ctor()
@@ -108,7 +103,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		.inherit<Test>()
 		.inherit<TestB>();	
 
-	pwlua::method_slow<int>(L,"global_print",&global_print);
+	pwlua::method<int>(L,"global_print",&global_print);
 	pwlua::method_fast<int,1>(L,"global_print2",&global_print);
 
 	lua_State* L2 = lua_newthread(L);
@@ -139,7 +134,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		vp.invoke_nr<Test&>(*pp);
 	}
 	printf("type:%d\r\n",lua_type(L2,-1));
-	
 
 	lua_gc(L,LUA_GCCOLLECT,0);
 	lua_unref(L,thread_ref);
