@@ -1,29 +1,32 @@
-﻿========================================================================
-    控制台应用程序：LuaHelper 项目概述
-========================================================================
+﻿轻量级lua-c++绑定为
+*泛型实现
+*支持多继承
+*继承体系间的对象能自动安全转换(基类子对象的偏移)
 
-应用程序向导已为您创建了此 LuaHelper 应用程序。
+lua_State* L = luaL_newstate();
+luaL_openlibs(L);
 
-本文件概要介绍组成 LuaHelper 应用程序的
-的每个文件的内容。
+pwlua::class_<Test>(L,"Test")
+	.ctor()
+	.method2<void, NNN>("print",&Test::print)
+	.method2<void, 2>("print2",&Test::print2);
+	
+pwlua::class_<TestB>(L,"TestB")
+	.ctor()
+	.method<TestB&>("printn",&TestB::printn);
 
 
-LuaHelper.vcproj
-    这是使用应用程序向导生成的 VC++ 项目的主项目文件，
-    其中包含生成该文件的 Visual C++ 的版本信息，以及有关使用应用程序向导选择的平台、配置和项目功能的信息。
 
-LuaHelper.cpp
-    这是主应用程序源文件。
+pwlua::class_<Test2>(L,"Test2")
+	.ctor<TestB*>()
+	.inherit<Test>()
+	.inherit<TestB>();	
 
-/////////////////////////////////////////////////////////////////////////////
-其他标准文件：
+pwlua::method<int>(L,&global_print,"global_print");
+pwlua::method2<int,1>(L,&global_print,"global_print");
 
-StdAfx.h, StdAfx.cpp
-    这些文件用于生成名为 LuaHelper.pch 的预编译头 (PCH) 文件和名为 StdAfx.obj 的预编译类型文件。
 
-/////////////////////////////////////////////////////////////////////////////
-其他注释：
-
-应用程序向导使用“TODO:”注释来指示应添加或自定义的源代码部分。
-
-/////////////////////////////////////////////////////////////////////////////
+pwlua::reference vv(L2,"v");
+Test* pp = vv.cast<Test*>();
+pwlua::temporary vp(L2,"print",vv);
+vp.invoke_nr<Test&>(*pp);
