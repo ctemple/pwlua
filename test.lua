@@ -8,6 +8,8 @@ v.pp = r
 v.pp.n = 43252
 print("v.pp.n=" .. v.pp.n)
 v.pp = nil
+--print(v.v34)
+--v.v34 = 21
 
 
 print("r.n=" .. r.n)

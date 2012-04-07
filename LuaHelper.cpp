@@ -120,7 +120,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	if(luaL_dofile(L2,"../test.lua") != 0)
 	{
-		printf("%s",lua_tostring(L,-1));
+		printf("%s",lua_tostring(L2,-1));
 	}
 
 	printf("type:%d\r\n",lua_type(L2,-1));

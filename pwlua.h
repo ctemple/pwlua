@@ -884,8 +884,8 @@ namespace pwlua
 			while(parents->fn_index != NULL)
 				++parents;
 
-			parents->fn_index = &class_helper<PARENT>::_index;
-			parents->fn_newindex = &class_helper<PARENT>::_newindex;
+			parents->fn_index = &class_helper<PARENT>::_index2;
+			parents->fn_newindex = &class_helper<PARENT>::_newindex2;
 			parents->offset = _detail::offset<PARENT,T>();
 			parents->classname = &class_name<PARENT>::name[0];
 			parents->fn_cast = &class_helper<PARENT>::cast;
@@ -1055,6 +1055,22 @@ namespace pwlua
 	public:
 		static int _newindex(lua_State* L)
 		{
+			if(_newindex2(L) == 0)
+				return 0;
+
+			char buf[128] = "";
+			sprintf_s(buf,"__newindex can't find member,%s",lua_tostring(L,2));
+			
+			lua_pop(L,1);
+			lua_pushstring(L,buf);
+			lua_error(L);
+
+			return 0;
+		}
+
+		// 0 = success, 1 = failed
+		static int _newindex2(lua_State* L)
+		{
 			_detail::object<T>::proxy* _proxy = (_detail::object<T>::proxy*)lua_touserdata(L,1);
 			const char* name = lua_tostring(L,2);
 
@@ -1088,8 +1104,22 @@ namespace pwlua
 			lua_pushnil(L);
 			return 1;
 		}
-
+	public:
 		static int _index(lua_State* L)
+		{
+			if(_index2(L) == 1)
+				return 1;
+
+			char buf[128] = "";
+			sprintf_s(buf,"__index can't find member,%s",lua_tostring(L,2));
+
+			lua_pushstring(L,buf);
+			lua_error(L);
+
+			return 0;
+		}
+
+		static int _index2(lua_State* L)
 		{
 			_detail::object<T>::proxy* _proxy = (_detail::object<T>::proxy*)lua_touserdata(L,1);
 			const char* name = lua_tostring(L,2);
