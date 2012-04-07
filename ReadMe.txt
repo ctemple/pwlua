@@ -19,20 +19,16 @@ pwlua::class_<Test>(L,"Test")
 	
 pwlua::class_<TestB>(L,"TestB")
 	.ctor()
-	.method_fast<TestB&,0>("printn",&TestB::printn);
+	.method_fast<TestB&,0>("printn",&TestB::printn)
+	.member<int>("n",&TestB::n);
 
 
 
 pwlua::class_<Test2>(L,"Test2")
 	.ctor<TestB*>()
 	.inherit<Test>()
-	.inherit<TestB>();	
+	.inherit<TestB>()
+	.member<TestB*>("pp",&Test2::pp);	
 
 pwlua::method<int>(L,"global_print",&global_print);
 pwlua::method_fast<int,1>(L,"global_print2",&global_print);
-
-
-pwlua::reference vv(L2,"v");
-Test* pp = vv.cast<Test*>();
-pwlua::temporary vp(L2,"print",vv);
-vp.invoke_nr<Test&>(*pp);
