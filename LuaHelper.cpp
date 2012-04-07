@@ -29,6 +29,11 @@ public:
 	{
 		printf("Test::print2 %d\r\n",n121);
 	}
+
+	int print3()
+	{
+		return 120102;
+	}
 };
 
 class TestB
@@ -67,7 +72,19 @@ int global_print()
 	return 9999;
 }
 
-#define NNN 1212
+template<long NN> 
+struct STest
+{
+	STest()
+	{
+
+	}
+};
+
+
+#define STRINGIZE(something) STRINGIZE_HELPER(something)
+#define STRINGIZE_HELPER(something) #something
+// #define ENFORCE(exp) MakeEnforcer((exp),__FILE__ "_" STRINGIZE(__LINE__)).Enforce()
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -76,12 +93,13 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	pwlua::class_<Test>(L,"Test")
 		.ctor()
-		.method2<void, NNN>("print",&Test::print)
-		.method2<void, 2>("print2",&Test::print2);
+		.method_fast<void, 1>("print",&Test::print)
+		.method_fast<void, 2>("print2",&Test::print2)
+		.method_slow<int>("print3",&Test::print3);
 		
 	pwlua::class_<TestB>(L,"TestB")
 		.ctor()
-		.method<TestB&>("printn",&TestB::printn);
+		.method_fast<TestB&,0>("printn",&TestB::printn);
 
 	
 
@@ -90,8 +108,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		.inherit<Test>()
 		.inherit<TestB>();	
 
-	pwlua::method<int>(L,&global_print,"global_print");
-	pwlua::method2<int,1>(L,&global_print,"global_print");
+	pwlua::method_slow<int>(L,"global_print",&global_print);
+	pwlua::method_fast<int,1>(L,"global_print2",&global_print);
 
 	lua_State* L2 = lua_newthread(L);
 	

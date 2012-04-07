@@ -5,9 +5,10 @@
 r = TestB.new()
 v = Test2.new(r)
 
-v:print()
+v:print3()
 v:print2(5943)
 
+global_print()
 
 print( "result=" .. tostring(v:printn()))
 print( "name=" .. v.name)

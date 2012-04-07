@@ -336,6 +336,47 @@ namespace pwlua
 
 			// ***************************************************************************
 
+			template<class FN> struct method_slow
+			{
+				struct method_proxy
+				{
+					FN fn;
+				};
+
+				template<class RT> struct helper
+				{
+					static int invoke(lua_State* L)
+					{
+						int l1 = lua_type(L,1);
+						int l2 = lua_type(L,2);
+						proxy* _proxy = (proxy*)lua_touserdata(L,2);
+						T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+						_proxy->offset = 0;
+
+						method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
+
+						stack_helper<RT>::push(L,method<FN,99999>::helper<RT>::call(*obj,mproxy->fn,L,3) );
+						return 1;					
+					}
+				};
+
+				template<> struct helper<void>
+				{
+					static int invoke(lua_State* L)
+					{
+						proxy* _proxy = (proxy*)lua_touserdata(L,2);
+						T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+						_proxy->offset = 0;
+
+						method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
+
+						method<FN,99999>::helper<void>::call(*obj,mproxy->fn,L,3)
+					}
+				};
+			};
+
+			// ***************************************************************************
+
 			template<class FN,long N> struct method
 			{
 				static FN fn;
@@ -487,6 +528,35 @@ namespace pwlua
 		// ***************************************************************************
 		// ***************************************************************************
 		// ***************************************************************************
+
+		template<class FN> struct method_slow
+		{
+			struct method_proxy
+			{
+				FN fn;
+			};
+
+			template<class RT> struct helper
+			{
+				static int invoke(lua_State* L)
+				{
+					method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
+
+					stack_helper<RT>::push(L,method<FN,99999>::helper<RT>::call(mproxy->fn,L,2) );
+					return 1;					
+				}
+			};
+
+			template<> struct helper<void>
+			{
+				static int invoke(lua_State* L)
+				{
+					method_proxy* mproxy = (method_proxy*)lua_touserdata(L,1);
+
+					method<FN,99999>::helper<void>::call(mproxy->fn,L,2)
+				}
+			};
+		};
 
 		template<class FN,long N> struct method
 		{
@@ -781,21 +851,7 @@ namespace pwlua
 			return *this;
 		}
 
-		template<class RT,class FN> class_helper<T>& method(const char* name,FN fn)
-		{
-			assert((_detail::object<T>::method<FN,0>::fn) == NULL);
-
-			_detail::object<T>::method<FN,0>::fn = fn;
-
-			lua_CFunction lfn = &_detail::object<T>::method<FN,0>::helper<RT>::invoke;
-			lua_getref(L,class_name<T>::meta);
-			lua_pushcfunction(L,lfn);
-			lua_setfield(L,-2,name);
-			lua_pop(L,1);
-			return *this;
-		}
-
-		template<class RT,long N,class FN> class_helper<T>& method2(const char* name,FN fn)
+		template<class RT,long N,class FN> class_helper<T>& method_fast(const char* name,FN fn)
 		{
 			assert((_detail::object<T>::method<FN,N>::fn) == NULL);
 
@@ -804,6 +860,24 @@ namespace pwlua
 			lua_CFunction lfn = &_detail::object<T>::method<FN,N>::helper<RT>::invoke;
 			lua_getref(L,class_name<T>::meta);
 			lua_pushcfunction(L,lfn);
+			lua_setfield(L,-2,name);
+			lua_pop(L,1);
+			return *this;
+		}
+
+		template<class RT,class FN> class_helper<T>& method_slow(const char* name,FN fn)
+		{
+			lua_CFunction lfn = _detail::object<T>::method_slow<FN>::helper<RT>::invoke;
+
+			lua_getref(L,class_name<T>::meta);
+
+			_detail::object<T>::method_slow<FN>::method_proxy* _proxy = (_detail::object<T>::method_slow<FN>::method_proxy*)lua_newuserdata(L,sizeof(_detail::object<T>::method_slow<FN>::method_proxy));
+			_proxy->fn = fn;
+			lua_newtable(L);
+			lua_pushcfunction(L,lfn);
+			lua_setfield(L,-2,"__call");
+			lua_setmetatable(L,-2);
+
 			lua_setfield(L,-2,name);
 			lua_pop(L,1);
 			return *this;
@@ -906,21 +980,26 @@ namespace pwlua
 		return class_helper<T>(L,name);
 	}
 
-	template<class RT,class FN> void method(lua_State* L,FN fn,const char* name)
-	{
-		assert((_detail::method<FN,0>::fn) == NULL);
-		_detail::method<FN,0>::fn = fn;
-		lua_CFunction lfn = &_detail::method<FN,0>::helper<RT>::invoke;
-		lua_pushcfunction(L,lfn);
-		lua_setglobal(L,name);
-	}
-
-	template<class RT,long N,class FN> void method2(lua_State* L,FN fn,const char* name)
+	template<class RT,long N,class FN> void method_fast(lua_State* L,const char* name,FN fn)
 	{
 		assert((_detail::method<FN,N>::fn) == NULL);
 		_detail::method<FN,N>::fn = fn;
 		lua_CFunction lfn = &_detail::method<FN,N>::helper<RT>::invoke;
 		lua_pushcfunction(L,lfn);
+		lua_setglobal(L,name);
+	}
+
+	template<class RT,class FN>  void method_slow(lua_State* L,const char* name,FN fn)
+	{
+		lua_CFunction lfn = _detail::method_slow<FN>::helper<RT>::invoke;
+
+		_detail::method_slow<FN>::method_proxy* _proxy = (_detail::method_slow<FN>::method_proxy*)lua_newuserdata(L,sizeof(_detail::method_slow<FN>::method_proxy));
+		_proxy->fn = fn;
+		lua_newtable(L);
+		lua_pushcfunction(L,lfn);
+		lua_setfield(L,-2,"__call");
+		lua_setmetatable(L,-2);
+
 		lua_setglobal(L,name);
 	}
 
