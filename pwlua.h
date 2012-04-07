@@ -25,6 +25,83 @@ extern "C"
 namespace pwlua
 {
 
+	class refcounted_object
+	{
+	public:
+		refcounted_object()
+		{
+			_ref = 0;
+		}
+		virtual ~refcounted_object()
+		{
+
+		}
+	public:
+		void ref()
+		{
+			++_ref;
+		}
+
+		void unref()
+		{
+			if(--_ref == 0)
+				delete this;
+		}
+	protected:
+		int _ref;
+	};
+
+	template <class T,class U> class conversion
+	{
+		typedef char _small;
+		typedef long _big;
+		static _small test(U);
+		static _big test(...);
+		static T makeT();
+	public:
+		enum { exists = sizeof(test(makeT())) == sizeof(_small) };
+		enum { exists2way = (exists && conversion<U,T>::exists) };
+		enum { sameType = false };
+	};
+
+	template<bool,class T,class U> struct select;
+
+	template<class T,class U> struct select<true,T,U>
+	{
+		typedef T Result;
+	};
+
+	template<class T,class U> struct select<false,T,U>
+	{
+		typedef U Result;
+	};
+
+	template<class T,bool O>
+	struct ref
+	{
+		static void exec(T* v)
+		{
+			static_cast<refcounted_object*>(v)->ref();
+		}
+
+		static void unexec(T* v)
+		{
+			static_cast<refcounted_object*>(v)->unref();
+		}
+	};
+
+	template<class T>
+	struct ref<T,false>
+	{
+		static void exec(T* v)
+		{
+		}
+
+		static void unexec(T* v)
+		{
+		}
+	};
+
 #ifdef _WIN32
 	typedef __int64 int64;
 	typedef __int32 int32;
@@ -76,6 +153,8 @@ namespace pwlua
 		{
 			static void push(lua_State* L,T* val)
 			{
+				static bool is_refcounted_obj = conversion<T,refcounted_object>::exists == 1;
+
 				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
@@ -83,6 +162,8 @@ namespace pwlua
 				_proxy->offset = 0;
 				_proxy->obj = val;
 				_proxy->meta = class_name<T>::meta;
+				if(is_refcounted_obj)
+					_proxy->obj->ref();
 				lua_getref(L,class_name<T>::meta);
 				lua_setmetatable(L,-2);
 			}
@@ -121,6 +202,8 @@ namespace pwlua
 		{
 			static void push(lua_State* L,T& val)
 			{
+				static const bool is_refcounted_obj = conversion<T,refcounted_object>::exists == 1;
+
 				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->type = _type_object_;
@@ -128,6 +211,11 @@ namespace pwlua
 				_proxy->offset = 0;
 				_proxy->obj = &val;
 				_proxy->meta = class_name<T>::meta;
+				if(is_refcounted_obj)
+				{
+					_proxy->gc = true;
+					ref<T,is_refcounted_obj>::exec(_proxy->obj);
+				}
 				lua_getref(L,class_name<T>::meta);
 				lua_setmetatable(L,-2);
 			}
@@ -789,12 +877,17 @@ namespace pwlua
 		{
 			static int create(lua_State* L)
 			{
+				static const bool is_refcounted_obj = conversion<T,refcounted_object>::exists == 1;
+
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
 				_proxy->type = _type_object_;
 				_proxy->offset = 0;
 				_proxy->obj = new T();
 				_proxy->meta = class_name<T>::meta;
+
+				ref<T,is_refcounted_obj>::exec(_proxy->obj);
+				
 				lua_getref(L,class_name<T>::meta);
 				lua_setmetatable(L,-2);
 				return 1;
@@ -805,16 +898,20 @@ namespace pwlua
 		{
 			static int create(lua_State* L)
 			{
+				static const bool is_refcounted_obj = conversion<T,refcounted_object>::exists == 1;
+
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
 				_proxy->offset = 0;
 				_proxy->type = _type_object_;
 				_proxy->meta = class_name<T>::meta;
-				
 				_proxy->obj = new T
 					(
 						stack_helper<P1>::cast(L,1)
 					);
+
+				ref<T,is_refcounted_obj>::exec(_proxy->obj);
+
 				lua_getref(L,class_name<T>::meta);
 				lua_setmetatable(L,-2);
 				return 1;
@@ -825,16 +922,22 @@ namespace pwlua
 		{
 			static int create(lua_State* L,P1 p1,P2 p2)
 			{
+				static const bool is_refcounted_obj = conversion<T,refcounted_object>::exists == 1;
+
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
 				_proxy->offset = 0;
 				_proxy->type = _type_object_;
 				_proxy->meta = class_name<T>::meta;
+				_proxy->obj->ref();
+
 				_proxy->obj = new T
 					(
 						stack_helper<P1>::cast(L,1),
 						stack_helper<P1>::cast(L,2)
 					);
+
+				ref<T,is_refcounted_obj>::exec(_proxy->obj);
 				lua_getref(L,class_name<T>::meta);
 				lua_setmetatable(L,-2);
 				return 1;
@@ -1162,9 +1265,16 @@ namespace pwlua
 
 		static int _gc(lua_State* L)
 		{
+			static const bool is_refcounted_object = conversion<T,refcounted_object>::exists;
+
 			_detail::object<T>::proxy* _proxy = (_detail::object<T>::proxy*)lua_touserdata(L,1);
 			if(_proxy->gc)
-				delete _proxy->obj;
+			{
+				if(is_refcounted_object)
+					ref<T,is_refcounted_object>::unexec(_proxy->obj);
+				else
+					delete _proxy->obj;
+			}
 			_proxy->obj = NULL;
 			_proxy->gc = false;
 			return 0;

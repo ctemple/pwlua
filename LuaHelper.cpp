@@ -7,7 +7,7 @@
 
 #pragma comment(lib,"lua5.1.lib")
 
-class Test
+class Test : public pwlua::refcounted_object
 {
 public:
 	Test()
@@ -42,6 +42,11 @@ public:
 	TestB()
 	{
 		n = 1212;
+	}
+
+	~TestB()
+	{
+		printf("TestB::~TestB\r\n");
 	}
 	TestB& printn()
 	{
@@ -79,11 +84,6 @@ int global_print()
 
 int _tmain(int argc, _TCHAR* argv[])
 {
-	TestB nm;
-	int TestB::* nn = &TestB::n;
-
-	int ndf = (nm.*nn);
-
 	lua_State* L = luaL_newstate();
 	luaL_openlibs(L);
 
