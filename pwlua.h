@@ -48,9 +48,13 @@ namespace pwlua
 
 	// ---------------------------------------------------------------------------------------------------------
 
-	static const char* _class_name = "name";
+	static const char* _class_name = "classname";
 	static const char* _base_classes = "baseclasses";
 	static const char* _cast = "cast";
+
+	static const char _type_method_ = 100;
+	static const char _type_object_ = 101;
+	static const char _type_member_ = 101;
 
 	// ---------------------------------------------------------------------------------------------------------
 
@@ -63,27 +67,7 @@ namespace pwlua
 
 		template<class T> struct stack_helper
 		{
-			/*
-			static void push(lua_State* L,const T& val)
-			{
-				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
-				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
-				_proxy->gc = false;
-				_proxy->offset = 0;
-				_proxy->obj = const_cast<T*>(&val);
-				_proxy->meta = class_name<T>::meta;
-				lua_getref(L,class_name<T>::meta);
-				lua_setmetatable(L,-2);
-			}
-
-			static T& from(lua_State* L,int index)
-			{
-				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
-				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_touserdata(L,index));
-				
-				return *_proxy->obj;
-			}
-			*/
+			
 		};
 
 		// ***************************************************************************
@@ -95,6 +79,7 @@ namespace pwlua
 				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
+				_proxy->type = _type_object_;
 				_proxy->offset = 0;
 				_proxy->obj = val;
 				_proxy->meta = class_name<T>::meta;
@@ -138,6 +123,7 @@ namespace pwlua
 			{
 				assert(class_name<T>::meta != LUA_NOREF && "class nofound");
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
+				_proxy->type = _type_object_;
 				_proxy->gc = false;
 				_proxy->offset = 0;
 				_proxy->obj = &val;
@@ -320,6 +306,7 @@ namespace pwlua
 			ptrdiff_t offset;
 			lua_CFunction fn_cast;
 			lua_CFunction fn_index;
+			lua_CFunction fn_newindex;
 			char* classname;
 		};
 
@@ -331,18 +318,111 @@ namespace pwlua
 		{
 			struct proxy
 			{
+				char type;
 				T* obj;
 				bool gc;
 				ptrdiff_t offset;
 				int meta;
 			};
 
-			// ***************************************************************************
+			
+			// ******************************************************************************************
+
+			struct member_proxy_base
+			{
+				char type;
+				lua_CFunction getter;
+				lua_CFunction setter;
+			};
+
+
+			template<class D,class DT> struct member_slow
+			{
+				struct member_proxy : public member_proxy_base
+				{
+					DT dt;
+				};
+
+				static int get(lua_State* L)
+				{
+					proxy* _proxy = (proxy*)lua_touserdata(L,1);
+					T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+					_proxy->offset = 0;
+
+					// 2 == name
+					const char* name = lua_tostring(L,2);
+
+					member_proxy* mproxy = (member_proxy*)lua_touserdata(L,3);
+					
+					stack_helper<D>::push(L,(obj->*mproxy->dt));
+
+					return 1;
+				}
+
+				static int set(lua_State* L)
+				{
+					proxy* _proxy = (proxy*)lua_touserdata(L,1);
+					T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+					_proxy->offset = 0;
+
+					// 2 == name
+					// 3 = value
+
+					member_proxy* mproxy = (member_proxy*)lua_touserdata(L,4);
+
+					(obj->*mproxy->dt) = stack_helper<D>::cast(L,3);
+
+					return 0;
+				}
+			};
+
+			template<class D,class DT> struct member_slow<D*,DT>
+			{
+				struct member_proxy : public member_proxy_base
+				{
+					DT dt;
+				};
+
+				static int get(lua_State* L)
+				{
+					proxy* _proxy = (proxy*)lua_touserdata(L,1);
+					T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+					_proxy->offset = 0;
+
+					// 2 == name
+					const char* name = lua_tostring(L,2);
+
+					member_proxy* mproxy = (member_proxy*)lua_touserdata(L,3);
+
+					stack_helper<D&>::push(L,*(obj->*mproxy->dt));
+
+					return 1;
+				}
+
+				static int set(lua_State* L)
+				{
+					proxy* _proxy = (proxy*)lua_touserdata(L,1);
+					T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
+					_proxy->offset = 0;
+
+					// 2 == name
+					// 3 = value
+
+					member_proxy* mproxy = (member_proxy*)lua_touserdata(L,4);
+
+					(obj->*mproxy->dt) = stack_helper<D*>::cast(L,3);
+
+					return 0;
+				}
+			};
+			
+			// ******************************************************************************************
 
 			template<class FN> struct method_slow
 			{
 				struct method_proxy
 				{
+					char type;
 					FN fn;
 				};
 
@@ -350,8 +430,6 @@ namespace pwlua
 				{
 					static int invoke(lua_State* L)
 					{
-						int l1 = lua_type(L,1);
-						int l2 = lua_type(L,2);
 						proxy* _proxy = (proxy*)lua_touserdata(L,2);
 						T* obj = (T*)((char*)_proxy->obj + _proxy->offset);
 						_proxy->offset = 0;
@@ -528,6 +606,7 @@ namespace pwlua
 
 		template<class T> template<class FN,long N> FN object<T>::method<FN,N>::fn = NULL;
 
+
 		// ***************************************************************************
 		// ***************************************************************************
 		// ***************************************************************************
@@ -536,6 +615,7 @@ namespace pwlua
 		{
 			struct method_proxy
 			{
+				char type;
 				FN fn;
 			};
 
@@ -560,6 +640,8 @@ namespace pwlua
 				}
 			};
 		};
+
+		// ******************************************************************************************
 
 		template<class FN,long N> struct method
 		{
@@ -709,6 +791,7 @@ namespace pwlua
 			{
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
+				_proxy->type = _type_object_;
 				_proxy->offset = 0;
 				_proxy->obj = new T();
 				_proxy->meta = class_name<T>::meta;
@@ -725,6 +808,7 @@ namespace pwlua
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
 				_proxy->offset = 0;
+				_proxy->type = _type_object_;
 				_proxy->meta = class_name<T>::meta;
 				
 				_proxy->obj = new T
@@ -744,6 +828,7 @@ namespace pwlua
 				object<T>::proxy* _proxy = (object<T>::proxy*)(lua_newuserdata(L,sizeof(object<T>::proxy)));
 				_proxy->gc = true;
 				_proxy->offset = 0;
+				_proxy->type = _type_object_;
 				_proxy->meta = class_name<T>::meta;
 				_proxy->obj = new T
 					(
@@ -784,6 +869,7 @@ namespace pwlua
 			class_name<T>::meta = lua_ref(L,true);
 
 			make_index();
+			make_newindex();
 			dtor();
 		}
 
@@ -799,6 +885,7 @@ namespace pwlua
 				++parents;
 
 			parents->fn_index = &class_helper<PARENT>::_index;
+			parents->fn_newindex = &class_helper<PARENT>::_newindex;
 			parents->offset = _detail::offset<PARENT,T>();
 			parents->classname = &class_name<PARENT>::name[0];
 			parents->fn_cast = &class_helper<PARENT>::cast;
@@ -810,6 +897,16 @@ namespace pwlua
 			lua_getref(L,class_name<T>::meta);			
 			lua_pushcfunction(L,&_index);
 			lua_setfield(L,-2,"__index");
+			lua_pop(L,1);
+
+			return *this;
+		}
+
+		class_helper<T>& make_newindex()
+		{
+			lua_getref(L,class_name<T>::meta);			
+			lua_pushcfunction(L,&_newindex);
+			lua_setfield(L,-2,"__newindex");
 			lua_pop(L,1);
 
 			return *this;
@@ -854,6 +951,25 @@ namespace pwlua
 			return *this;
 		}
 
+		template<class D,class DT> class_helper<T>& member(const char* name,DT dt)
+		{
+			lua_getref(L,class_name<T>::meta);
+
+			_detail::object<T>::member_slow<D,DT>::member_proxy* _proxy = 
+				(_detail::object<T>::member_slow<D,DT>::member_proxy*)lua_newuserdata(L,sizeof(_detail::object<T>::member_slow<D,DT>::member_proxy));
+
+			_proxy->dt = dt;
+			_proxy->type = _type_member_;
+			_proxy->getter = _detail::object<T>::member_slow<D,DT>::get;
+			_proxy->setter = _detail::object<T>::member_slow<D,DT>::set;
+
+			lua_setfield(L,-2,name);
+			lua_pop(L,1);
+
+			return *this;
+		}
+
+
 		template<class RT,long N,class FN> class_helper<T>& method_fast(const char* name,FN fn)
 		{
 			assert((_detail::object<T>::method<FN,N>::fn) == NULL);
@@ -876,6 +992,7 @@ namespace pwlua
 
 			_detail::object<T>::method_slow<FN>::method_proxy* _proxy = (_detail::object<T>::method_slow<FN>::method_proxy*)lua_newuserdata(L,sizeof(_detail::object<T>::method_slow<FN>::method_proxy));
 			_proxy->fn = fn;
+			_proxy->type = _type_method_;
 			lua_newtable(L);
 			lua_pushcfunction(L,lfn);
 			lua_setfield(L,-2,"__call");
@@ -886,6 +1003,92 @@ namespace pwlua
 			return *this;
 		}
 	public:
+		static int _try_index_member(lua_State* L)
+		{
+			int type = lua_type(L,-1);
+
+			if(type == LUA_TLIGHTUSERDATA || type == LUA_TUSERDATA)
+			{
+				char* _proxy_type = (char*)lua_touserdata(L,-1);
+				if((*_proxy_type) == _type_member_)
+				{
+					lua_pop(L,1); // member userdata
+
+					_detail::object<T>::member_proxy_base*  _proxy = (_detail::object<T>::member_proxy_base*)_proxy_type;
+					
+					lua_pushcfunction(L,_proxy->getter);
+					lua_pushvalue(L,1);
+					lua_pushvalue(L,2);
+					lua_pushlightuserdata(L,_proxy);
+					lua_pcall(L,3,1,0);
+					return 1;
+				}
+			}
+			return 1;
+		}
+
+		static int _try_newindex_member(lua_State* L)
+		{
+			int type = lua_type(L,-1);
+
+			if(type == LUA_TLIGHTUSERDATA || type == LUA_TUSERDATA)
+			{
+				char* _proxy_type = (char*)lua_touserdata(L,-1);
+				if((*_proxy_type) == _type_member_)
+				{
+					lua_pop(L,1); // member userdata
+
+					_detail::object<T>::member_proxy_base*  _proxy = (_detail::object<T>::member_proxy_base*)_proxy_type;
+
+					lua_pushcfunction(L,_proxy->setter);
+					lua_pushvalue(L,1);
+					lua_pushvalue(L,2);
+					lua_pushvalue(L,3);
+					lua_pushlightuserdata(L,_proxy);
+					lua_pcall(L,4,0,0);
+					return 0;
+				}
+			}
+			lua_pushnil(L);
+			return 1;
+		}
+	public:
+		static int _newindex(lua_State* L)
+		{
+			_detail::object<T>::proxy* _proxy = (_detail::object<T>::proxy*)lua_touserdata(L,1);
+			const char* name = lua_tostring(L,2);
+
+			lua_getref(L,class_name<T>::meta);
+			lua_getfield(L,-1,name);
+
+			if( lua_type(L,-1) != LUA_TNIL)
+			{
+				lua_remove(L,-2);
+
+				return _try_newindex_member(L);
+			}
+
+			lua_pop(L,1); // nil
+
+			lua_getfield(L,-1,_base_classes);
+			_detail::parent* parents = (_detail::parent*)lua_touserdata(L,-1);
+			lua_pop(L,2);
+
+			while(parents->fn_index != NULL)
+			{
+				_proxy->offset += parents->offset;
+				if(parents->fn_newindex(L) == 0)
+				{
+					return 0;
+				}
+				_proxy->offset -= parents->offset;
+				++parents;
+			}
+
+			lua_pushnil(L);
+			return 1;
+		}
+
 		static int _index(lua_State* L)
 		{
 			_detail::object<T>::proxy* _proxy = (_detail::object<T>::proxy*)lua_touserdata(L,1);
@@ -898,13 +1101,13 @@ namespace pwlua
 			}
 
 			lua_getref(L,class_name<T>::meta);
-			lua_pushvalue(L,2);
-			lua_gettable(L,-2);
+			lua_getfield(L,-1,name);
 
-			if(lua_type(L,-1) != LUA_TNIL)
+			if( lua_type(L,-1) != LUA_TNIL)
 			{
 				lua_remove(L,-2);
-				return 1;
+
+				return _try_index_member(L);
 			}
 
 			lua_pop(L,1); // nil
@@ -915,11 +1118,12 @@ namespace pwlua
 
 			while(parents->fn_index != NULL)
 			{
+				_proxy->offset += parents->offset;
 				if(parents->fn_index(L) == 1)
 				{
-					_proxy->offset += parents->offset;
 					return 1;
 				}
+				_proxy->offset -= parents->offset;
 				++parents;
 			}
 
@@ -997,6 +1201,7 @@ namespace pwlua
 		lua_CFunction lfn = _detail::method_slow<FN>::helper<RT>::invoke;
 
 		_detail::method_slow<FN>::method_proxy* _proxy = (_detail::method_slow<FN>::method_proxy*)lua_newuserdata(L,sizeof(_detail::method_slow<FN>::method_proxy));
+		_proxy->type = _type_method_;
 		_proxy->fn = fn;
 		lua_newtable(L);
 		lua_pushcfunction(L,lfn);

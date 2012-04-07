@@ -57,6 +57,7 @@ class Test2 : public Test,public TestB
 public:
 	Test2(TestB* v)
 	{
+		pp = NULL;
 		if(v != NULL)
 			n = v->n;
 	}
@@ -65,6 +66,9 @@ public:
 	{
 		printf("Test2::print\r\n");
 	}
+
+public:
+	TestB* pp;
 };
 
 int global_print()
@@ -72,17 +76,14 @@ int global_print()
 	return 9999;
 }
 
-template<long NN> 
-struct STest
-{
-	STest()
-	{
-
-	}
-};
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	TestB nm;
+	int TestB::* nn = &TestB::n;
+
+	int ndf = (nm.*nn);
+
 	lua_State* L = luaL_newstate();
 	luaL_openlibs(L);
 
@@ -94,14 +95,16 @@ int _tmain(int argc, _TCHAR* argv[])
 		
 	pwlua::class_<TestB>(L,"TestB")
 		.ctor()
-		.method_fast<TestB&,0>("printn",&TestB::printn);
+		.method_fast<TestB&,0>("printn",&TestB::printn)
+		.member<int>("n",&TestB::n);
 
 	
 
 	pwlua::class_<Test2>(L,"Test2")
 		.ctor<TestB*>()
 		.inherit<Test>()
-		.inherit<TestB>();	
+		.inherit<TestB>()
+		.member<TestB*>("pp",&Test2::pp);	
 
 	pwlua::method<int>(L,"global_print",&global_print);
 	pwlua::method_fast<int,1>(L,"global_print2",&global_print);
@@ -120,6 +123,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		printf("%s",lua_tostring(L,-1));
 	}
 
+	printf("type:%d\r\n",lua_type(L2,-1));
+	
 	{
 		pwlua::temporary v(L2,"v");
 		Test* pp = v.cast<Test*>();
@@ -136,9 +141,10 @@ int _tmain(int argc, _TCHAR* argv[])
 	printf("type:%d\r\n",lua_type(L2,-1));
 
 	lua_gc(L,LUA_GCCOLLECT,0);
+	
+
 	lua_unref(L,thread_ref);
 	lua_gc(L,LUA_GCCOLLECT,0);
-	
 	lua_close(L);
 	return 0;
 }
