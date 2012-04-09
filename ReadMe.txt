@@ -2,6 +2,7 @@
 *泛型实现
 *支持多继承
 *继承体系间的对象能自动安全转换(基类子对象的偏移)
+*向上，向下转型支持
 
 ***method_fast为保证性能,导致了一个不易用的地方
 ***同原型的函数会保存到同一个变量上，因此加了一个常量以区别
@@ -10,6 +11,9 @@
 ***method绑定需要创建一个userdata，并在其元表的__call中调用原始方法,比fast版本稍慢
 
 ***temporary引用lua栈对象,在c++中必须该类只能为栈变量
+
+*** c++中返回的指针，将会在lua gc 中管理
+*** c++中返回的引用，不会在lua gc 中处理 
 
 pwlua::class_<Test>(L,"Test")
 	.ctor()
@@ -32,3 +36,23 @@ pwlua::class_<Test2>(L,"Test2")
 
 pwlua::method<int>(L,"global_print",&global_print);
 pwlua::method_fast<int,1>(L,"global_print2",&global_print);
+
+
+lua
+--[[
+class Test2 : public TestB { ... }
+--]]
+
+r = TestB.new()
+
+v = Test2.new(r)
+
+
+-- cast up
+r2 = v:cast(TestB.name)
+
+r2:printn()
+
+-- cast down
+r3 = r2:cast(Test2.name)
+r3:printn()

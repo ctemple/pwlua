@@ -4,10 +4,10 @@
 
 r = TestB.new()
 v = Test2.new(r)
-r2 = v:cast("TestB")
+r2 = v:cast(TestB.name)
 r2:printn()
 
-r3 = r2:cast("Test2")
+r3 = r2:cast(Test2.name)
 r3:printn()
 
 print(v.nnnn)

@@ -967,6 +967,10 @@ namespace pwlua
 		#endif
 
 			lua_newtable(L);
+			
+			lua_pushstring(L,&class_name<T>::name[0]);
+			lua_setfield(L,-2,"name");
+
 			lua_setglobal(L,class_name<T>::name);
 
 			lua_newtable(L);
@@ -985,7 +989,7 @@ namespace pwlua
 			lua_setfield(L,-2,_cast);
 
 			lua_pushcfunction(L,&class_helper<T>::cast_l);
-			lua_setfield(L,-2,_cast_l);			
+			lua_setfield(L,-2,_cast_l);	
 
 			class_name<T>::meta = lua_ref(L,true);
 
