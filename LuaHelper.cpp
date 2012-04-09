@@ -7,7 +7,7 @@
 
 #pragma comment(lib,"lua5.1.lib")
 
-class Test : public pwlua::refcounted_object
+class Test 
 {
 public:
 	Test()
@@ -72,6 +72,15 @@ public:
 		printf("Test2::print\r\n");
 	}
 
+	int getnnnn()
+	{
+		return 234923;
+	}
+
+	void setnnnn(int nnn)
+	{
+		
+	}
 public:
 	TestB* pp;
 };
@@ -89,13 +98,13 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	pwlua::class_<Test>(L,"Test")
 		.ctor()
-		.method_fast<void, 1>("print",&Test::print)
-		.method_fast<void, 2>("print2",&Test::print2)
+		.method_fast<1,void>("print",&Test::print)
+		.method_fast<2,void>("print2",&Test::print2)
 		.method<int>("print3",&Test::print3);
 		
 	pwlua::class_<TestB>(L,"TestB")
 		.ctor()
-		.method_fast<TestB&,0>("printn",&TestB::printn)
+		.method_fast<0,TestB&>("printn",&TestB::printn)
 		.member<int>("n",&TestB::n);
 
 	
@@ -104,10 +113,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		.ctor<TestB*>()
 		.inherit<Test>()
 		.inherit<TestB>()
-		.member<TestB*>("pp",&Test2::pp);	
+		.member<TestB*>("pp",&Test2::pp)
+		.member<int>("nnnn",&Test2::getnnnn,&Test2::setnnnn);
 
 	pwlua::method<int>(L,"global_print",&global_print);
-	pwlua::method_fast<int,1>(L,"global_print2",&global_print);
+	pwlua::method_fast<1,int>(L,"global_print2",&global_print);
 
 	lua_State* L2 = lua_newthread(L);
 	
@@ -141,7 +151,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	printf("type:%d\r\n",lua_type(L2,-1));
 
 	lua_gc(L,LUA_GCCOLLECT,0);
-	
 
 	lua_unref(L,thread_ref);
 	lua_gc(L,LUA_GCCOLLECT,0);

@@ -4,6 +4,17 @@
 
 r = TestB.new()
 v = Test2.new(r)
+r2 = v:cast("TestB")
+r2:printn()
+
+r3 = r2:cast("Test2")
+r3:printn()
+
+print(v.nnnn)
+v.nnnn = 12312;
+
+print("111111111111111111111111111111111111111111")
+
 v.pp = r
 v.pp.n = 43252
 print("v.pp.n=" .. v.pp.n)
